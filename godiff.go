@@ -449,7 +449,7 @@ func add_change_segment(chg DiffChanger, ops []DiffOp, op DiffOp) []DiffOp {
 
 	gap1, gap2 := op.start1-last1, op.start2-last2
 	if len(ops) > 0 && (op.op == 0 || (gap1 > flag_context_lines*2 && gap2 > flag_context_lines*2)) {
-		e1, e2 := min_int(op.start1, last1+flag_context_lines), min_int(op.start2, last2+flag_context_lines)
+		e1, e2 := MinInt(op.start1, last1+flag_context_lines), MinInt(op.start2, last2+flag_context_lines)
 		if e1 > last1 || e2 > last2 {
 			ops = append(ops, DiffOp{DIFF_OP_SAME, last1, e1, last2, e2})
 		}
@@ -457,7 +457,7 @@ func add_change_segment(chg DiffChanger, ops []DiffOp, op DiffOp) []DiffOp {
 		ops = ops[:0]
 	}
 
-	c1, c2 := max_int(last1, op.start1-flag_context_lines), max_int(last2, op.start2-flag_context_lines)
+	c1, c2 := MaxInt(last1, op.start1-flag_context_lines), MaxInt(last2, op.start2-flag_context_lines)
 	if c1 < op.start1 || c2 < op.start2 {
 		ops = append(ops, DiffOp{DIFF_OP_SAME, c1, op.start1, c2, op.start2})
 	}
@@ -530,14 +530,6 @@ func report_diff(chg DiffChanger, data1, data2 []int, change1, change2 []bool) b
 	return changed
 }
 
-// convert byte to lower case
-func to_lower_byte(b byte) byte {
-	if b >= 'A' && b <= 'Z' {
-		return b - 'A' + 'a'
-	}
-	return b
-}
-
 //
 // split text into array of individual rune position, and another array for comparison.
 //
@@ -578,396 +570,17 @@ func split_runes(s []byte) ([]int, []int) {
 	return pos[:n+1], cmp[:n]
 }
 
-//
-// Write bytes to buffer, ready to be output as html,
-// replace special chars with html-entities
-//
-func write_html_bytes(buf *bytes.Buffer, line []byte) {
-	var esc string
-	lasti := 0
-	for i, v := range line {
-		switch v {
-		case '<':
-			esc = html_entity_lt
-		case '>':
-			esc = html_entity_gt
-		case '&':
-			esc = html_entity_amp
-		case '\'':
-			esc = html_entity_squote
-		case '"':
-			esc = html_entity_dquote
-		default:
-			continue
-		}
-		buf.Write(line[lasti:i])
-		buf.WriteString(esc)
-		lasti = i + 1
-	}
-	buf.Write(line[lasti:])
-}
-
-func html_preview_file(buf *bytes.Buffer, lines [][]byte) {
-	n := min_int(NUM_PREVIEW_LINES, len(lines))
-	w := len(fmt.Sprintf("%d", n))
-	buf.WriteString("<span class=\"nop\">")
-	for lineno, line := range lines[0:n] {
-		write_html_lineno(buf, lineno+1, w)
-		write_html_bytes(buf, line)
-		buf.WriteByte('\n')
-	}
-	buf.WriteString("</span></span>")
-}
-
 func output_diff_message_content(filename1, filename2 string, info1, info2 os.FileInfo, msg1, msg2 string, data1, data2 [][]byte, is_error bool) {
 
 	if flag_output_as_text {
-		out_acquire_lock()
-		if flag_unified_context {
-			fmt.Fprintf(out, "<<< %s: %s\n", filename1, msg1)
-			fmt.Fprintf(out, ">>> %s: %s\n\n", filename2, msg2)
-		} else {
-			fmt.Fprintf(out, "--- %s: %s\n", filename1, msg1)
-			fmt.Fprintf(out, "+++ %s: %s\n\n", filename2, msg2)
-		}
-		out_release_lock()
+		GenerateText(filename1, filename2, msg1, msg2)
 	} else {
-
-		outfmt := OutputFormat{
-			name1:     filename1,
-			name2:     filename2,
-			fileinfo1: info1,
-			fileinfo2: info2,
-		}
-
-		var span string
-		if is_error {
-			span = "<span class=\"err\">"
-		} else {
-			span = "<span class=\"msg\">"
-		}
-
-		if msg1 != "" {
-			outfmt.buf1.WriteString(span)
-			write_html_bytes(&outfmt.buf1, []byte(msg1))
-			outfmt.buf1.WriteString("</span><br>")
-		} else if data1 != nil && len(data1) > 0 {
-			html_preview_file(&outfmt.buf1, data1)
-		}
-
-		if msg2 != "" {
-			outfmt.buf2.WriteString(span)
-			write_html_bytes(&outfmt.buf2, []byte(msg2))
-			outfmt.buf2.WriteString("</span><br>")
-		} else if data2 != nil && len(data2) > 0 {
-			html_preview_file(&outfmt.buf2, data2)
-		}
-
-		html_file_table(&outfmt)
-
-		out.WriteString("<tr><td class=\"ttd\">")
-		out.Write(outfmt.buf1.Bytes())
-
-		out.WriteString("</td><td class=\"ttd\">")
-		out.Write(outfmt.buf2.Bytes())
-
-		out.WriteString("</td></tr>\n")
-		out.WriteString("</table><br>\n")
-		out_release_lock()
+		GenerateHtml(filename1, filename2, info1, info2, msg1, msg2, data1, data2, is_error)
 	}
 }
 
 func output_diff_message(filename1, filename2 string, info1, info2 os.FileInfo, msg1, msg2 string, is_error bool) {
 	output_diff_message_content(filename1, filename2, info1, info2, msg1, msg2, nil, nil, is_error)
-}
-
-func write_html_lineno(buf *bytes.Buffer, lineno, width int) {
-	if lineno > 0 {
-		fmt.Fprintf(buf, "<span class=\"lno\">%-*d </span>", width, lineno)
-	} else {
-		buf.WriteString("<span class=\"lno\"> </span>")
-	}
-}
-
-func write_html_lineno_unified(buf *bytes.Buffer, mode string, lineno1, lineno2, width int) {
-	buf.WriteString("<span class=\"lno\">")
-
-	if lineno1 > 0 {
-		fmt.Fprintf(buf, "%-*d", width, lineno1)
-	} else {
-		fmt.Fprintf(buf, "%-*s", width, "")
-	}
-
-	if lineno2 > 0 {
-		fmt.Fprintf(buf, " %-*d ", width, lineno2)
-	} else {
-		fmt.Fprintf(buf, " %-*s ", width, "")
-	}
-
-	buf.WriteString(mode)
-	buf.WriteString(" </span>")
-}
-
-func write_html_lines(buf *bytes.Buffer, class string, lines [][]byte, lineno, lineno_width int) {
-	buf.WriteString("<span class=\"")
-	buf.WriteString(class)
-	buf.WriteString("\">")
-	for _, line := range lines {
-		lineno++
-		write_html_lineno(buf, lineno, lineno_width)
-		write_html_bytes(buf, line)
-		buf.WriteByte('\n')
-	}
-	buf.WriteString("</span>")
-}
-
-func write_html_lines_unified(buf *bytes.Buffer, class string, mode string, lines [][]byte, start1, start2, lineno_width int) {
-	buf.WriteString("<span class=\"")
-	buf.WriteString(class)
-	buf.WriteString("\">")
-	for _, line := range lines {
-		if start1 >= 0 {
-			start1++
-		}
-		if start2 >= 0 {
-			start2++
-		}
-		write_html_lineno_unified(buf, mode, start1, start2, lineno_width)
-		write_html_bytes(buf, line)
-		buf.WriteByte('\n')
-	}
-	buf.WriteString("</span>")
-}
-
-func write_html_blanks(buf *bytes.Buffer, n int) {
-	buf.WriteString("<span class=\"nop\">")
-	for n > 0 {
-		buf.WriteString("<span class=\"lno\"> </span>\n")
-		n--
-	}
-	buf.WriteString("</span>")
-}
-
-// Write single line with changes
-func write_html_line_change(buf *bytes.Buffer, line []byte, pos []int, change []bool) {
-	in_chg := false
-	for i, end := 0, len(change); i < end; {
-		j, c := i+1, change[i]
-		for j < end && change[j] == c {
-			j++
-		}
-		if c && !in_chg {
-			buf.WriteString("<span class=\"chg\">")
-		} else if !c && in_chg {
-			buf.WriteString("</span>")
-		}
-		write_html_bytes(buf, line[pos[i]:pos[j]])
-		i, in_chg = j, c
-	}
-	if in_chg {
-		buf.WriteString("</span>")
-	}
-}
-
-func html_file_table(outfmt *OutputFormat) {
-
-	if !outfmt.header_printed {
-		out_acquire_lock()
-		outfmt.header_printed = true
-		out.WriteString("<table class=\"tab\"><tr><td class=\"tth\"><span class=\"hdr\">")
-		out.WriteString(html.EscapeString(outfmt.name1))
-		out.WriteString("</span>")
-		if outfmt.fileinfo1 != nil {
-			fmt.Fprintf(out, "<br><span class=\"inf\">%d %s</span>", outfmt.fileinfo1.Size(), outfmt.fileinfo1.ModTime().Format(time.RFC1123))
-		}
-		out.WriteString("</td><td class=\"tth\"><span class=\"hdr\">")
-		out.WriteString(html.EscapeString(outfmt.name2))
-		out.WriteString("</span>")
-		if outfmt.fileinfo2 != nil {
-			fmt.Fprintf(out, "<br><span class=\"inf\">%d %s</span>", outfmt.fileinfo2.Size(), outfmt.fileinfo2.ModTime().Format(time.RFC1123))
-		}
-		out.WriteString("</td></tr>")
-	}
-}
-
-func html_file_table_unified(outfmt *OutputFormat) {
-
-	if !outfmt.header_printed {
-		out_acquire_lock()
-		outfmt.header_printed = true
-		out.WriteString("<table class=\"tab\"><tr><td class=\"tth\"><span class=\"hdr\">")
-		out.WriteString(html.EscapeString(outfmt.name1))
-		out.WriteString("</span>")
-		if outfmt.fileinfo1 != nil {
-			fmt.Fprintf(out, " <span class=\"inf\">%d %s</span>", outfmt.fileinfo1.Size(), outfmt.fileinfo1.ModTime().Format(time.RFC1123))
-		}
-		out.WriteString("<br><span class=\"hdr\">")
-		out.WriteString(html.EscapeString(outfmt.name2))
-		out.WriteString("</span>")
-		if outfmt.fileinfo2 != nil {
-			fmt.Fprintf(out, " <span class=\"inf\">%d %s</span>", outfmt.fileinfo2.Size(), outfmt.fileinfo2.ModTime().Format(time.RFC1123))
-		}
-		out.WriteString("</td></tr>")
-	}
-}
-
-func (chg *DiffChangerUnifiedHtml) diff_lines(ops []DiffOp) {
-
-	html_file_table_unified(chg.OutputFormat)
-	chg.buf1.Reset()
-
-	for _, v := range ops {
-		switch v.op {
-		case DIFF_OP_INSERT:
-			write_html_lines_unified(&chg.buf1, "add", "+", chg.file2[v.start2:v.end2], -1, v.start2, chg.lineno_width)
-
-		case DIFF_OP_REMOVE:
-			write_html_lines_unified(&chg.buf1, "del", "-", chg.file1[v.start1:v.end1], v.start1, -1, chg.lineno_width)
-
-		case DIFF_OP_MODIFY:
-			write_html_lines_unified(&chg.buf1, "del", "-", chg.file1[v.start1:v.end1], v.start1, -1, chg.lineno_width)
-			write_html_lines_unified(&chg.buf1, "add", "+", chg.file2[v.start2:v.end2], -1, v.start2, chg.lineno_width)
-
-		default:
-			write_html_lines_unified(&chg.buf1, "nop", " ", chg.file1[v.start1:v.end1], v.start1, v.start2, chg.lineno_width)
-		}
-	}
-
-	out.WriteString("<tr><td class=\"ttd\">")
-	out.Write(chg.buf1.Bytes())
-	out.WriteString("</td></tr>\n")
-}
-
-func (chg *DiffChangerHtml) diff_lines(ops []DiffOp) {
-
-	html_file_table(chg.OutputFormat)
-
-	chg.buf1.Reset()
-	chg.buf2.Reset()
-
-	for _, v := range ops {
-		switch v.op {
-		case DIFF_OP_INSERT:
-			write_html_blanks(&chg.buf1, v.end2-v.start2)
-			write_html_lines(&chg.buf2, "add", chg.file2[v.start2:v.end2], v.start2, chg.lineno_width)
-
-		case DIFF_OP_REMOVE:
-			write_html_lines(&chg.buf1, "del", chg.file1[v.start1:v.end1], v.start1, chg.lineno_width)
-			write_html_blanks(&chg.buf2, v.end1-v.start1)
-
-		case DIFF_OP_MODIFY:
-			chg.buf1.WriteString("<span class=\"upd\">")
-			chg.buf2.WriteString("<span class=\"upd\">")
-
-			start1, start2 := v.start1, v.start2
-
-			for start1 < v.end1 && start2 < v.end2 {
-
-				write_html_lineno(&chg.buf1, start1+1, chg.lineno_width)
-				write_html_lineno(&chg.buf2, start2+1, chg.lineno_width)
-
-				if flag_suppress_line_changes {
-					write_html_bytes(&chg.buf1, chg.file1[start1])
-					write_html_bytes(&chg.buf2, chg.file2[start2])
-				} else {
-					// report on changes within the line
-					line1, line2 := chg.file1[start1], chg.file2[start2]
-					pos1, cmp1 := split_runes(line1)
-					pos2, cmp2 := split_runes(line2)
-
-					change1, change2 := do_diff(cmp1, cmp2)
-
-					if change1 != nil {
-						// perform shift boundaries, to make the changes more readable
-						shift_boundaries(cmp1, change1, rune_bouundary_score)
-						shift_boundaries(cmp2, change2, rune_bouundary_score)
-
-						write_html_line_change(&chg.buf1, line1, pos1, change1)
-						write_html_line_change(&chg.buf2, line2, pos2, change2)
-					}
-				}
-
-				chg.buf1.WriteByte('\n')
-				chg.buf2.WriteByte('\n')
-				start1++
-				start2++
-			}
-
-			chg.buf1.WriteString("</span>")
-			chg.buf2.WriteString("</span>")
-
-			if start1 < v.end1 {
-				write_html_lines(&chg.buf1, "del", chg.file1[start1:v.end1], start1, chg.lineno_width)
-				write_html_blanks(&chg.buf2, v.end1-start1)
-			}
-
-			if start2 < v.end2 {
-				write_html_blanks(&chg.buf1, v.end2-start2)
-				write_html_lines(&chg.buf2, "add", chg.file2[start2:v.end2], start2, chg.lineno_width)
-			}
-
-		default:
-			n1, n2 := v.end1-v.start1, v.end2-v.start2
-			maxn := max_int(n1, n2)
-
-			if n1 > 0 {
-				write_html_lines(&chg.buf1, "nop", chg.file1[v.start1:v.end1], v.start1, chg.lineno_width)
-			}
-			if n1 < maxn {
-				write_html_blanks(&chg.buf1, maxn-n1)
-			}
-
-			if n2 > 0 {
-				write_html_lines(&chg.buf2, "nop", chg.file2[v.start2:v.end2], v.start2, chg.lineno_width)
-			}
-			if n2 < maxn {
-				write_html_blanks(&chg.buf2, maxn-n2)
-			}
-		}
-	}
-
-	out.WriteString("<tr><td class=\"ttd\">")
-	out.Write(chg.buf1.Bytes())
-	out.WriteString("</td><td class=\"ttd\">")
-	out.Write(chg.buf2.Bytes())
-	out.WriteString("</td></tr>\n")
-
-}
-
-func (chg *DiffChangerUnifiedText) diff_lines(ops []DiffOp) {
-
-	if !chg.header_printed {
-		out_acquire_lock()
-		chg.header_printed = true
-		fmt.Fprintf(out, "--- %s\n", chg.name1)
-		fmt.Fprintf(out, "+++ %s\n", chg.name2)
-	}
-
-	fmt.Fprintf(out, "@@ -%d,%d +%d,%d @@\n", ops[0].start1+1, ops[len(ops)-1].end1-ops[0].start1, ops[0].start2+1, ops[len(ops)-1].end2-ops[0].start2)
-
-	for _, v := range ops {
-		switch v.op {
-		case DIFF_OP_INSERT, DIFF_OP_REMOVE, DIFF_OP_MODIFY:
-			for _, line := range chg.file1[v.start1:v.end1] {
-				out.WriteString("- ")
-				out.Write(line)
-				out.WriteByte('\n')
-			}
-
-			for _, line := range chg.file2[v.start2:v.end2] {
-				out.WriteString("+ ")
-				out.Write(line)
-				out.WriteByte('\n')
-			}
-
-		default:
-			for _, line := range chg.file1[v.start1:v.end1] {
-				out.WriteString("  ")
-				out.Write(line)
-				out.WriteByte('\n')
-			}
-		}
-	}
 }
 
 func print_line_numbers(mode string, start1, end1, start2, end2 int) {
@@ -981,55 +594,6 @@ func print_line_numbers(mode string, start1, end1, start2, end2 int) {
 	} else {
 		fmt.Fprintf(out, "%d,%d\n", start2+1, end2)
 	}
-}
-
-func (chg *DiffChangerText) diff_lines(ops []DiffOp) {
-
-	if !chg.header_printed {
-		out_acquire_lock()
-		chg.header_printed = true
-		fmt.Fprintf(out, "<<< %s\n", chg.name1)
-		fmt.Fprintf(out, ">>> %s\n", chg.name2)
-	}
-
-	for _, v := range ops {
-		switch v.op {
-		case DIFF_OP_SAME:
-			continue
-
-		case DIFF_OP_INSERT:
-			print_line_numbers("a", v.start1-1, -1, v.start2, v.end2)
-
-		case DIFF_OP_REMOVE:
-			print_line_numbers("d", v.start1, v.end1, v.start2-1, -1)
-
-		case DIFF_OP_MODIFY:
-			print_line_numbers("c", v.start1, v.end1, v.start2, v.end2)
-		}
-
-		for _, line := range chg.file1[v.start1:v.end1] {
-			out.WriteString("< ")
-			out.Write(line)
-			out.WriteByte('\n')
-		}
-
-		if v.end1 > v.start1 && v.end2 > v.start2 {
-			out.WriteString("---\n")
-		}
-
-		for _, line := range chg.file2[v.start2:v.end2] {
-			out.WriteString("> ")
-			out.Write(line)
-			out.WriteByte('\n')
-		}
-	}
-}
-
-//
-// Test for space character
-//
-func is_space(b byte) bool {
-	return b == ' ' || b == '\t' || b == '\v' || b == '\f'
 }
 
 func skip_space_rune(line []byte, i int) int {
@@ -1526,7 +1090,7 @@ func compress_equiv_ids(lines1, lines2 *LinesData, max_id1, max_id2 int) {
 
 	// Go through all lines, replace chunk of lines that does not exists in the
 	// other set with a single entry and a negative new id).
-	next_id := max_int(max_id1, max_id2) + 1
+	next_id := MaxInt(max_id1, max_id2) + 1
 	for findex := 0; findex < 2; findex++ {
 		var ids []int
 		var has_ids []bool
@@ -1723,7 +1287,7 @@ func (file *Filedata) check_binary() {
 		file.errormsg = MSG_FILE_SIZE_ZERO
 		return
 	}
-	if bytes.IndexByte(file.data[0:min_int(len(file.data), BINARY_CHECK_SIZE)], 0) >= 0 {
+	if bytes.IndexByte(file.data[0:MinInt(len(file.data), BINARY_CHECK_SIZE)], 0) >= 0 {
 		file.data = nil
 		file.errormsg = MSG_FILE_IS_BINARY
 		return
@@ -1735,7 +1299,7 @@ func (file *Filedata) check_binary() {
 //
 func (file *Filedata) split_lines() [][]byte {
 
-	lines := make([][]byte, 0, min_int(len(file.data)/32, 500))
+	lines := make([][]byte, 0, MinInt(len(file.data)/32, 500))
 	var i, previ int
 	var b, lastb byte
 
@@ -1966,7 +1530,7 @@ func diff_file(filename1, filename2 string, finfo1, finfo2 os.FileInfo) {
 				name2:        filename2,
 				fileinfo1:    finfo1,
 				fileinfo2:    finfo2,
-				lineno_width: len(fmt.Sprintf("%d", max_int(len(lines1), len(lines2)))),
+				lineno_width: len(fmt.Sprintf("%d", MaxInt(len(lines1), len(lines2)))),
 			},
 			file1: lines1,
 			file2: lines2,
@@ -2005,22 +1569,6 @@ func diff_file(filename1, filename2 string, finfo1, finfo2 os.FileInfo) {
 			output_diff_message(filename1, filename2, finfo1, finfo2, MSG_FILE_IDENTICAL, MSG_FILE_IDENTICAL, false)
 		}
 	}
-}
-
-// shortcut functions. hopefully will be inlined by compiler
-func max_int(a, b int) int {
-	if a < b {
-		return b
-	}
-	return a
-}
-
-// shortcut functions. hopefully will be inlined by compiler
-func min_int(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 //
