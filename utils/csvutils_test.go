@@ -1,11 +1,9 @@
-package main
+package utils
 
 import (
 	"fmt"
 	"path/filepath"
 	"testing"
-
-	"github.com/rsrini7/godiff/utils"
 )
 
 func TestColumnReorder(t *testing.T) {

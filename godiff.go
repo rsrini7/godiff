@@ -63,8 +63,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/rsrini7/godiff/csv"
 	"github.com/rsrini7/godiff/utils"
+	"github.com/wildducktheories/go-csv"
 )
 
 const (
@@ -1205,7 +1205,7 @@ func openCsvFile(fname string, finfo os.FileInfo, csvReorder *CsvReorder) *Filed
 		var reorderCount []int
 
 		sourceHeader := csvReorder.header
-		deltaHeader := GetHeader(fname)
+		deltaHeader := utils.GetHeader(fname)
 
 		for _, data := range sourceHeader {
 			destIdx := utils.Find(deltaHeader, data)
@@ -1213,7 +1213,7 @@ func openCsvFile(fname string, finfo os.FileInfo, csvReorder *CsvReorder) *Filed
 		}
 
 		//Copy(fname, fname+".original", 2048)
-		ColumnReorder(fname, reorderCount)
+		utils.ColumnReorder(fname, reorderCount)
 		//os.Rename(fname+".tmp", fname)
 		//stat, _ := os.Stat(fname)
 		return open_file(sortCsv(fname + ".colreordered"))
@@ -1532,7 +1532,7 @@ func diff_dirs(dirname1, dirname2 string, finfo1, finfo2 os.FileInfo) {
 						if strings.HasSuffix(dirname2+PATH_SEPARATOR+name2, ".csv") {
 							csvDeltaReorder := &CsvReorder{
 								reorderFlag: true,
-								header:      GetHeader(dirname1 + PATH_SEPARATOR + name1),
+								header:      utils.GetHeader(dirname1 + PATH_SEPARATOR + name1),
 							}
 							fdata = openCsvFile(dirname2+PATH_SEPARATOR+name2, dir2[i2], csvDeltaReorder)
 						} else {
@@ -1575,7 +1575,7 @@ func diff_file(filename1, filename2 string, finfo1, finfo2 os.FileInfo) {
 	if strings.HasSuffix(filename2, ".csv") {
 		csvDeltaReorder := &CsvReorder{
 			reorderFlag: true,
-			header:      GetHeader(filename1),
+			header:      utils.GetHeader(filename1),
 		}
 
 		file2 = openCsvFile(filename2, finfo2, csvDeltaReorder)
