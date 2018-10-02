@@ -70,3 +70,16 @@ func GetHeader(filePath string) []string {
 	}
 	return line
 }
+
+//HeaderPositionEqual :test whether the given two string slices are equal
+func HeaderPositionEqual(a, b []int) bool {
+
+	if (a != nil) && (b != nil) && (len(a) == len(b)) {
+		for i := range a {
+			if a[i] != b[i] {
+				return false
+			}
+		}
+	}
+	return true
+}

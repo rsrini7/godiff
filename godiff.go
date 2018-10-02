@@ -1202,21 +1202,28 @@ func expand_change_list(info1, info2 *LinesData, zchange1, zchange2 []bool) {
 func openCsvFile(fname string, finfo os.FileInfo, csvReorder *CsvReorder) *Filedata {
 
 	if csvReorder.reorderFlag {
-		var reorderCount []int
+		var reorderColumn []int
+		var sourceColumn []int
 
 		sourceHeader := csvReorder.header
 		deltaHeader := utils.GetHeader(fname)
 
-		for _, data := range sourceHeader {
+		for sourceIdx, data := range sourceHeader {
 			destIdx := utils.Find(deltaHeader, data)
-			reorderCount = append(reorderCount, destIdx)
+			sourceColumn = append(sourceColumn, sourceIdx)
+			reorderColumn = append(reorderColumn, destIdx)
 		}
 
 		//Copy(fname, fname+".original", 2048)
-		utils.ColumnReorder(fname, reorderCount)
+		if !utils.HeaderPositionEqual(sourceColumn, reorderColumn) {
+			utils.ColumnReorder(fname, reorderColumn)
+			return open_file(sortCsv(fname + ".colreordered"))
+		} else {
+			return open_file(sortCsv(fname))
+		}
+
 		//os.Rename(fname+".tmp", fname)
 		//stat, _ := os.Stat(fname)
-		return open_file(sortCsv(fname + ".colreordered"))
 	} else {
 		//return open_file(fname, stat)
 		return open_file(sortCsv(fname))
@@ -1235,8 +1242,16 @@ func sortCsv(fname string) (string, os.FileInfo) {
 	wfile, err := os.Create(fnameSorted)
 	defer wfile.Close()
 
+	// Use  a CSV parser to extract the partial keys from the parameter
+	/*pKeys, err := csv.Parse(flag_p_keys)
+	if err != nil || len(pKeys) < 1 {
+		usage("invalid key columns")
+	}*/
+
+	pKeys := strings.Split(flag_p_keys, ",")
+
 	var p *csv.SortProcess
-	p = (&csv.SortKeys{Keys: strings.Split(flag_p_keys, ","), Numeric: nil, Reversed: nil}).AsSortProcess()
+	p = (&csv.SortKeys{Keys: pKeys, Numeric: []string{}, Reversed: []string{}}).AsSortProcess()
 
 	var errCh = make(chan error, 1)
 	p.Run(csv.WithIoReader(file), csv.WithIoWriter(wfile), errCh)
