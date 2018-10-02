@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+
+	"github.com/rsrini7/godiff/utils"
 )
 
 func TestColumnReorder(t *testing.T) {
@@ -16,7 +18,7 @@ func TestColumnReorder(t *testing.T) {
 		for i := 0; i < columnCount; i++ {
 			reorderData = append(reorderData, i)
 		}
-		RandShuffle(reorderData)
+		utils.RandShuffle(reorderData)
 		//[]int{0, 2, 1, 4, 3, 5, 6, 7, 8, 9, 10}
 		ColumnReorder(filePath, reorderData)
 	})

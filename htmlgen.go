@@ -6,6 +6,8 @@ import (
 	"html"
 	"os"
 	"time"
+
+	"github.com/rsrini7/godiff/utils"
 )
 
 func GenerateHtml(filename1, filename2 string, info1, info2 os.FileInfo, msg1, msg2 string, data1, data2 [][]byte, is_error bool) {
@@ -191,7 +193,7 @@ func (chg *DiffChangerHtml) diff_lines(ops []DiffOp) {
 
 		default:
 			n1, n2 := v.end1-v.start1, v.end2-v.start2
-			maxn := MaxInt(n1, n2)
+			maxn := utils.MaxInt(n1, n2)
 
 			if n1 > 0 {
 				write_html_lines(&chg.buf1, "nop", chg.file1[v.start1:v.end1], v.start1, chg.lineno_width)
@@ -305,7 +307,7 @@ func write_html_lines(buf *bytes.Buffer, class string, lines [][]byte, lineno, l
 }
 
 func html_preview_file(buf *bytes.Buffer, lines [][]byte) {
-	n := MinInt(NUM_PREVIEW_LINES, len(lines))
+	n := utils.MinInt(NUM_PREVIEW_LINES, len(lines))
 	w := len(fmt.Sprintf("%d", n))
 	buf.WriteString("<span class=\"nop\">")
 	for lineno, line := range lines[0:n] {

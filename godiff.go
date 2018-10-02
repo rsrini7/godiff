@@ -62,6 +62,9 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/rsrini7/godiff/csv"
+	"github.com/rsrini7/godiff/utils"
 )
 
 const (
@@ -217,6 +220,7 @@ var (
 	flag_context_lines           int  = CONTEXT_LINES
 	flag_exclude_files           string
 	flag_max_goroutines          = 1
+	flag_p_keys                  string
 )
 
 // Job queue for goroutines
@@ -297,7 +301,17 @@ func main() {
 	flag.BoolVar(&flag_suppress_missing_file, "m", flag_suppress_missing_file, "Do not show content if corresponding file is missing")
 	flag.BoolVar(&flag_unified_context, "u", flag_unified_context, "Unified context")
 	flag.BoolVar(&flag_output_as_text, "n", flag_output_as_text, "Output using 'diff' text format instead of HTML")
+
+	flag.StringVar(&flag_p_keys, "key", "", "The Primary Key Columns")
+	//flags.StringVar(&numericKey, "numeric", "", "The specified columns are treated as numeric strings.")
+	//flags.StringVar(&reverseKey, "reverse", "", "The specified columns are sorted in reverse order.")
+
 	flag.Parse()
+
+	//keys, err := csv.Parse(flag_p_keys)
+	if flag_p_keys == "" {
+		usage("-key is must with primary key column/s")
+	}
 
 	if flag_version {
 		version()
@@ -449,7 +463,7 @@ func add_change_segment(chg DiffChanger, ops []DiffOp, op DiffOp) []DiffOp {
 
 	gap1, gap2 := op.start1-last1, op.start2-last2
 	if len(ops) > 0 && (op.op == 0 || (gap1 > flag_context_lines*2 && gap2 > flag_context_lines*2)) {
-		e1, e2 := MinInt(op.start1, last1+flag_context_lines), MinInt(op.start2, last2+flag_context_lines)
+		e1, e2 := utils.MinInt(op.start1, last1+flag_context_lines), utils.MinInt(op.start2, last2+flag_context_lines)
 		if e1 > last1 || e2 > last2 {
 			ops = append(ops, DiffOp{DIFF_OP_SAME, last1, e1, last2, e2})
 		}
@@ -457,7 +471,7 @@ func add_change_segment(chg DiffChanger, ops []DiffOp, op DiffOp) []DiffOp {
 		ops = ops[:0]
 	}
 
-	c1, c2 := MaxInt(last1, op.start1-flag_context_lines), MaxInt(last2, op.start2-flag_context_lines)
+	c1, c2 := utils.MaxInt(last1, op.start1-flag_context_lines), utils.MaxInt(last2, op.start2-flag_context_lines)
 	if c1 < op.start1 || c2 < op.start2 {
 		ops = append(ops, DiffOp{DIFF_OP_SAME, c1, op.start1, c2, op.start2})
 	}
@@ -548,7 +562,7 @@ func split_runes(s []byte) ([]int, []int) {
 				if flag_unicode_case_and_space {
 					h = int(unicode.ToLower(rune(b)))
 				} else {
-					h = int(to_lower_byte(b))
+					h = int(utils.ToLowerByte(b))
 				}
 			} else {
 				h = int(b)
@@ -639,7 +653,7 @@ func get_next_rune_xspace(line []byte, i int) (rune, bool, int) {
 
 func skip_space_byte(line []byte, i int) int {
 	for i < len(line) {
-		if !is_space(line[i]) {
+		if !utils.IsSpace(line[i]) {
 			return i
 		}
 		i++
@@ -655,7 +669,7 @@ func get_next_byte_xspace(line []byte, i int) (byte, bool, int) {
 	b, i := line[i], i+1
 	space_after := false
 	for i < len(line) {
-		if !is_space(line[i]) {
+		if !utils.IsSpace(line[i]) {
 			break
 		}
 		space_after = true
@@ -679,7 +693,7 @@ func compare_line_bytes(line1, line2 []byte) bool {
 			v1, i = get_next_byte_nonspace(line1, i)
 			v2, j = get_next_byte_nonspace(line2, j)
 			if flag_cmp_ignore_case && v1 != v2 {
-				v1, v2 = to_lower_byte(v1), to_lower_byte(v2)
+				v1, v2 = utils.ToLowerByte(v1), utils.ToLowerByte(v2)
 			}
 			if v1 != v2 {
 				return false
@@ -697,7 +711,7 @@ func compare_line_bytes(line1, line2 []byte) bool {
 			v1, space_after1, i = get_next_byte_xspace(line1, i)
 			v2, space_after2, j = get_next_byte_xspace(line2, j)
 			if flag_cmp_ignore_case && v1 != v2 {
-				v1, v2 = to_lower_byte(v1), to_lower_byte(v2)
+				v1, v2 = utils.ToLowerByte(v1), utils.ToLowerByte(v2)
 			}
 			if v1 != v2 || space_after1 != space_after2 {
 				return false
@@ -712,7 +726,7 @@ func compare_line_bytes(line1, line2 []byte) bool {
 			return false
 		}
 		for i < len1 && j < len2 {
-			if to_lower_byte(line1[i]) != to_lower_byte(line2[j]) {
+			if utils.ToLowerByte(line1[i]) != utils.ToLowerByte(line2[j]) {
 				return false
 			}
 			i, j = i+1, j+1
@@ -808,9 +822,9 @@ func compute_hash_bytes(line1 []byte) uint32 {
 	switch {
 	case flag_cmp_ignore_all_space:
 		for _, v1 := range line1 {
-			if !is_space(v1) {
+			if !utils.IsSpace(v1) {
 				if flag_cmp_ignore_case {
-					v1 = to_lower_byte(v1)
+					v1 = utils.ToLowerByte(v1)
 				}
 				hash = hash32(hash, v1)
 			}
@@ -820,7 +834,7 @@ func compute_hash_bytes(line1 []byte) uint32 {
 		last_hash := hash
 		last_space := true
 		for _, v1 := range line1 {
-			if is_space(v1) {
+			if utils.IsSpace(v1) {
 				if !last_space {
 					last_hash = hash
 					hash = hash32(hash, ' ')
@@ -828,7 +842,7 @@ func compute_hash_bytes(line1 []byte) uint32 {
 				last_space = true
 			} else {
 				if flag_cmp_ignore_case {
-					v1 = to_lower_byte(v1)
+					v1 = utils.ToLowerByte(v1)
 				}
 				hash = hash32(hash, v1)
 				last_space = false
@@ -840,7 +854,7 @@ func compute_hash_bytes(line1 []byte) uint32 {
 
 	case flag_cmp_ignore_case:
 		for _, v1 := range line1 {
-			v1 = to_lower_byte(v1)
+			v1 = utils.ToLowerByte(v1)
 			hash = hash32(hash, v1)
 		}
 
@@ -1090,7 +1104,7 @@ func compress_equiv_ids(lines1, lines2 *LinesData, max_id1, max_id2 int) {
 
 	// Go through all lines, replace chunk of lines that does not exists in the
 	// other set with a single entry and a negative new id).
-	next_id := MaxInt(max_id1, max_id2) + 1
+	next_id := utils.MaxInt(max_id1, max_id2) + 1
 	for findex := 0; findex < 2; findex++ {
 		var ids []int
 		var has_ids []bool
@@ -1194,19 +1208,45 @@ func openCsvFile(fname string, finfo os.FileInfo, csvReorder *CsvReorder) *Filed
 		deltaHeader := GetHeader(fname)
 
 		for _, data := range sourceHeader {
-			destIdx := Find(deltaHeader, data)
+			destIdx := utils.Find(deltaHeader, data)
 			reorderCount = append(reorderCount, destIdx)
 		}
 
-		Copy(fname, fname+".original", 2048)
+		//Copy(fname, fname+".original", 2048)
 		ColumnReorder(fname, reorderCount)
-		os.Rename(fname+".tmp", fname)
-		stat, _ := os.Stat(fname)
-		return open_file(fname, stat)
+		//os.Rename(fname+".tmp", fname)
+		//stat, _ := os.Stat(fname)
+		return open_file(sortCsv(fname + ".colreordered"))
 	} else {
-		return open_file(fname, finfo)
+		//return open_file(fname, stat)
+		return open_file(sortCsv(fname))
+	}
+}
+
+func sortCsv(fname string) (string, os.FileInfo) {
+	file, err := os.Open(fname)
+	defer file.Close()
+
+	if strings.HasSuffix(fname, ".colreordered") {
+		defer os.Remove(fname)
 	}
 
+	fnameSorted := fname + ".sorted"
+	wfile, err := os.Create(fnameSorted)
+	defer wfile.Close()
+
+	var p *csv.SortProcess
+	p = (&csv.SortKeys{Keys: strings.Split(flag_p_keys, ","), Numeric: nil, Reversed: nil}).AsSortProcess()
+
+	var errCh = make(chan error, 1)
+	p.Run(csv.WithIoReader(file), csv.WithIoWriter(wfile), errCh)
+	err = <-errCh
+	if err != nil {
+		fmt.Printf("fatal: %v\n", err)
+		os.Exit(1)
+	}
+	stat, _ := os.Stat(fnameSorted)
+	return fnameSorted, stat
 }
 
 // open file, and read/mmap the entire content into byte array
@@ -1291,6 +1331,11 @@ func open_file(fname string, finfo os.FileInfo) *Filedata {
 
 // Close file (and umap it)
 func (file *Filedata) close_file() {
+
+	if strings.HasSuffix(file.name, ".sorted") {
+		defer os.Remove(file.name)
+	}
+
 	if file.osfile != nil {
 		if file.is_mapped && file.data != nil {
 			unmap_file(file.data)
@@ -1311,7 +1356,7 @@ func (file *Filedata) check_binary() {
 		file.errormsg = MSG_FILE_SIZE_ZERO
 		return
 	}
-	if bytes.IndexByte(file.data[0:MinInt(len(file.data), BINARY_CHECK_SIZE)], 0) >= 0 {
+	if bytes.IndexByte(file.data[0:utils.MinInt(len(file.data), BINARY_CHECK_SIZE)], 0) >= 0 {
 		file.data = nil
 		file.errormsg = MSG_FILE_IS_BINARY
 		return
@@ -1323,7 +1368,7 @@ func (file *Filedata) check_binary() {
 //
 func (file *Filedata) split_lines() [][]byte {
 
-	lines := make([][]byte, 0, MinInt(len(file.data)/32, 500))
+	lines := make([][]byte, 0, utils.MinInt(len(file.data)/32, 500))
 	var i, previ int
 	var b, lastb byte
 
@@ -1599,7 +1644,7 @@ func diff_file(filename1, filename2 string, finfo1, finfo2 os.FileInfo) {
 				name2:        filename2,
 				fileinfo1:    finfo1,
 				fileinfo2:    finfo2,
-				lineno_width: len(fmt.Sprintf("%d", MaxInt(len(lines1), len(lines2)))),
+				lineno_width: len(fmt.Sprintf("%d", utils.MaxInt(len(lines1), len(lines2)))),
 			},
 			file1: lines1,
 			file2: lines2,

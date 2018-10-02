@@ -37,7 +37,7 @@ func ColumnReorder(filePath string, columns []int) {
 
 func getWriter(filePath string) (*csv.Writer, *os.File) {
 	// Creating csv writer
-	wFile, err := os.Create(filePath + ".tmp")
+	wFile, err := os.Create(filePath + ".colreordered")
 	if err != nil {
 		fmt.Println("Error:", err)
 		return nil, nil
