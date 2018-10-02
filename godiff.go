@@ -1185,8 +1185,32 @@ func expand_change_list(info1, info2 *LinesData, zchange1, zchange2 []bool) {
 	}
 }
 
+func openCsvFile(fname string, finfo os.FileInfo, csvReorder *CsvReorder) *Filedata {
+
+	if csvReorder.reorderFlag {
+		var reorderCount []int
+
+		sourceHeader := csvReorder.header
+		deltaHeader := GetHeader(fname)
+
+		for _, data := range sourceHeader {
+			destIdx := Find(deltaHeader, data)
+			reorderCount = append(reorderCount, destIdx)
+		}
+
+		Copy(fname, fname+".original", 2048)
+		ColumnReorder(fname, reorderCount)
+		os.Rename(fname+".tmp", fname)
+		stat, _ := os.Stat(fname)
+		return open_file(fname, stat)
+	} else {
+		return open_file(fname, finfo)
+	}
+
+}
+
 // open file, and read/mmap the entire content into byte array
-func open_file(fname string, finfo os.FileInfo, reorderFlag bool) *Filedata {
+func open_file(fname string, finfo os.FileInfo) *Filedata {
 
 	file := &Filedata{name: fname, info: finfo}
 	fsize := file.info.Size()
@@ -1236,24 +1260,6 @@ func open_file(fname string, finfo os.FileInfo, reorderFlag bool) *Filedata {
 			return file
 		}
 		file.data = fdata
-		file.osfile.Close()
-		file.osfile = nil
-	} else if strings.HasSuffix(fname, ".csv") {
-
-		//TODO
-		/*if reorderFlag {
-			reorderCount := []int{}
-			ColumnReorder(fname, reorderCount)
-		}*/
-
-		fdata := make([]byte, fsize, fsize)
-		n, err := file.osfile.Read(fdata)
-		if err != nil {
-			file.errormsg = err.Error()
-			return file
-		}
-		file.data = fdata[:n]
-		// close file
 		file.osfile.Close()
 		file.osfile = nil
 	} else if has_mmap && fsize > MMAP_THRESHOLD {
@@ -1387,7 +1393,7 @@ func read_sorted_dir(dirname string) ([]os.FileInfo, error) {
 // compare 2 dirs.
 func diff_dirs(dirname1, dirname2 string, finfo1, finfo2 os.FileInfo) {
 
-	reorderFlag := true
+	var fdata *Filedata
 
 	dirname1 = strings.TrimRight(dirname1, PATH_SEPARATOR)
 	dirname2 = strings.TrimRight(dirname2, PATH_SEPARATOR)
@@ -1455,10 +1461,19 @@ func diff_dirs(dirname1, dirname2 string, finfo1, finfo2 os.FileInfo) {
 					if flag_suppress_missing_file {
 						output_diff_message(dirname1+PATH_SEPARATOR+name1, dirname2+PATH_SEPARATOR+name1, dir1[i1], nil, "", MSG_FILE_NOT_EXISTS, true)
 					} else {
-						fdata := open_file(dirname1+PATH_SEPARATOR+name1, dir1[i1], !reorderFlag)
+						if strings.HasSuffix(dirname1+PATH_SEPARATOR+name1, ".csv") {
+							csvSourceReorder := &CsvReorder{
+								reorderFlag: false,
+								header:      nil,
+							}
+							fdata = openCsvFile(dirname1+PATH_SEPARATOR+name1, dir1[i1], csvSourceReorder)
+						} else {
+							fdata = open_file(dirname1+PATH_SEPARATOR+name1, dir1[i1])
+						}
 						fdata.check_binary()
 						output_diff_message_content(dirname1+PATH_SEPARATOR+name1, dirname2+PATH_SEPARATOR+name1, dir1[i1], nil, fdata.errormsg, MSG_FILE_NOT_EXISTS, fdata.split_lines(), nil, true)
 						fdata.close_file()
+
 					}
 				}
 				i1++
@@ -1469,7 +1484,16 @@ func diff_dirs(dirname1, dirname2 string, finfo1, finfo2 os.FileInfo) {
 					if flag_suppress_missing_file {
 						output_diff_message(dirname1+PATH_SEPARATOR+name2, dirname2+PATH_SEPARATOR+name2, nil, dir2[i2], MSG_FILE_NOT_EXISTS, "", true)
 					} else {
-						fdata := open_file(dirname2+PATH_SEPARATOR+name2, dir2[i2], reorderFlag)
+						if strings.HasSuffix(dirname2+PATH_SEPARATOR+name2, ".csv") {
+							csvDeltaReorder := &CsvReorder{
+								reorderFlag: true,
+								header:      GetHeader(dirname1 + PATH_SEPARATOR + name1),
+							}
+							fdata = openCsvFile(dirname2+PATH_SEPARATOR+name2, dir2[i2], csvDeltaReorder)
+						} else {
+							fdata = open_file(dirname2+PATH_SEPARATOR+name2, dir2[i2])
+						}
+
 						fdata.check_binary()
 						output_diff_message_content(dirname1+PATH_SEPARATOR+name2, dirname2+PATH_SEPARATOR+name2, nil, dir2[i2], MSG_FILE_NOT_EXISTS, fdata.errormsg, nil, fdata.split_lines(), true)
 						fdata.close_file()
@@ -1483,13 +1507,36 @@ func diff_dirs(dirname1, dirname2 string, finfo1, finfo2 os.FileInfo) {
 	}
 }
 
+type CsvReorder struct {
+	reorderFlag bool
+	header      []string
+}
+
 // compare 2 file
 func diff_file(filename1, filename2 string, finfo1, finfo2 os.FileInfo) {
 
-	reorderFlag := true
+	var file1, file2 *Filedata
 
-	file1 := open_file(filename1, finfo1, !reorderFlag)
-	file2 := open_file(filename2, finfo2, reorderFlag)
+	if strings.HasSuffix(filename1, ".csv") {
+		csvSourceReorder := &CsvReorder{
+			reorderFlag: false,
+			header:      nil,
+		}
+		file1 = openCsvFile(filename1, finfo1, csvSourceReorder)
+	} else {
+		file1 = open_file(filename1, finfo1)
+	}
+
+	if strings.HasSuffix(filename2, ".csv") {
+		csvDeltaReorder := &CsvReorder{
+			reorderFlag: true,
+			header:      GetHeader(filename1),
+		}
+
+		file2 = openCsvFile(filename2, finfo2, csvDeltaReorder)
+	} else {
+		file2 = open_file(filename2, finfo2)
+	}
 
 	defer file1.close_file()
 	defer file2.close_file()
