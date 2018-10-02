@@ -6,30 +6,64 @@ import (
 	"os"
 )
 
-func columnReorder(rFile *os.File, fromColumn int, toColumn int) {
-	reader := csv.NewReader(rFile)
+//ColumnReorder is to reorder the CSV columns
+func ColumnReorder(filePath string, columns []int) {
+	file, err := os.Open(filePath)
+	defer file.Close()
 
-	writer := getWriter()
+	if err != nil {
+		_ = fmt.Errorf("error in reading file %s", err)
+	}
+
+	reader := csv.NewReader(file)
+	var newColumn []string
+
+	writer, wFile := getWriter()
+	defer wFile.Close()
+
 	for line, err := reader.Read(); err == nil; line, err = reader.Read() {
-		//TODO: all columns should be specified with correct order based on input csv column length
-		// need to refactor to used one time column re-order instead of swap just two columns
-		if err = writer.Write([]string{line[fromColumn], line[toColumn]}); err != nil {
+		for _, v := range columns {
+			newColumn = append(newColumn, line[v])
+		}
+		//fmt.Println(strings.Join(newColumn, ","))
+
+		if err = writer.Write(newColumn); err != nil {
 			fmt.Println("Error:", err)
 			break
 		}
 
 		writer.Flush()
+		newColumn = newColumn[:0]
 	}
 }
 
-func getWriter() *csv.Writer {
+func getWriter() (*csv.Writer, *os.File) {
 	// Creating csv writer
+
 	wFile, err := os.Create("./temp000.csv")
 	if err != nil {
 		fmt.Println("Error:", err)
-		return nil
+		return nil, nil
 	}
-	defer wFile.Close()
+
 	writer := csv.NewWriter(wFile)
-	return writer
+	return writer, wFile
+}
+
+//GetColumnCount - return the CSV column count
+func GetColumnCount(filePath string) int {
+	file, err := os.Open(filePath)
+	defer file.Close()
+
+	if err != nil {
+		_ = fmt.Errorf("error in reading file %s", err)
+	}
+
+	reader := csv.NewReader(file)
+	line, err := reader.Read()
+
+	if err != nil {
+		_ = fmt.Errorf("error in reading file %s", err)
+	}
+	return len(line)
 }

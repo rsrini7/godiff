@@ -1,5 +1,10 @@
 package main
 
+import (
+	"math/rand"
+	"time"
+)
+
 // shortcut functions. hopefully will be inlined by compiler
 func MaxInt(a, b int) int {
 	if a < b {
@@ -29,4 +34,10 @@ func to_lower_byte(b byte) byte {
 //
 func is_space(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\v' || b == '\f'
+}
+
+//RandShuffle to shuffle the given slices of numbers
+func RandShuffle(input []int) {
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(input), func(i, j int) { input[i], input[j] = input[j], input[i] })
 }
