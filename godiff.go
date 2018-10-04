@@ -53,6 +53,7 @@ import (
 	"html"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"runtime/pprof"
@@ -122,6 +123,7 @@ type OutputFormat struct {
 	fileinfo1, fileinfo2 os.FileInfo
 	header_printed       bool
 	lineno_width         int
+	diffbuf              bytes.Buffer
 }
 
 const (
@@ -221,6 +223,8 @@ var (
 	flag_exclude_files           string
 	flag_max_goroutines          = 1
 	flag_p_keys                  string
+	flag_html_output             string = "diff.html"
+	flag_csv_delta               string = "delta.csv"
 )
 
 // Job queue for goroutines
@@ -240,7 +244,7 @@ var regexp_exclude_files *regexp.Regexp
 
 // Buffered stdout
 var (
-	out      = bufio.NewWriterSize(os.Stdout, OUTPUT_BUF_SIZE)
+	out      *bufio.Writer
 	out_lock sync.Mutex
 )
 
@@ -261,6 +265,8 @@ var (
 )
 
 var blank_line = make([]byte, 0)
+
+var csvHeaderData []string
 
 func version() {
 	fmt.Printf("godiff. Version %s\n", VERSION)
@@ -303,15 +309,18 @@ func main() {
 	flag.BoolVar(&flag_output_as_text, "n", flag_output_as_text, "Output using 'diff' text format instead of HTML")
 
 	flag.StringVar(&flag_p_keys, "key", "", "The Primary Key Columns")
+	flag.StringVar(&flag_html_output, "html", flag_html_output, "Generate HTML diff file")
 	//flags.StringVar(&numericKey, "numeric", "", "The specified columns are treated as numeric strings.")
 	//flags.StringVar(&reverseKey, "reverse", "", "The specified columns are sorted in reverse order.")
 
 	flag.Parse()
 
-	//keys, err := csv.Parse(flag_p_keys)
-	if flag_p_keys == "" {
-		usage("-key is must with primary key column/s")
+	output_html_file, err := os.Create(flag_html_output)
+	if err != nil {
+		usage(err.Error())
 	}
+
+	out = bufio.NewWriterSize(output_html_file, OUTPUT_BUF_SIZE)
 
 	if flag_version {
 		version()
@@ -339,6 +348,7 @@ func main() {
 	// flush output on termination
 	defer func() {
 		out.Flush()
+		output_html_file.Close()
 	}()
 
 	// choose which compare and hash function to use
@@ -387,12 +397,17 @@ func main() {
 		usage("Unable to compare file and directory")
 	}
 
+	if flag_p_keys == "" && filepath.Ext(file1) == ".csv" {
+		usage("-key is must for csv files - primary key column/s")
+	}
+
 	if !flag_output_as_text {
 		out.WriteString(HTML_HEADER)
 		fmt.Fprintf(out, "<title>Compare %s vs %s</title>\n", html.EscapeString(file1), html.EscapeString(file2))
 		out.WriteString(HTML_CSS)
 		out.WriteString("</head><body>\n")
 		fmt.Fprintf(out, "<p>Compare <strong>%s</strong> vs <strong>%s</strong></p>\n", html.EscapeString(file1), html.EscapeString(file2))
+
 	}
 
 	switch {
@@ -1592,6 +1607,7 @@ func diff_file(filename1, filename2 string, finfo1, finfo2 os.FileInfo) {
 			reorderFlag: true,
 			header:      utils.GetHeader(filename1),
 		}
+		csvHeaderData = csvDeltaReorder.header
 
 		file2 = openCsvFile(filename2, finfo2, csvDeltaReorder)
 	} else {

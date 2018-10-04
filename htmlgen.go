@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"html"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rsrini7/godiff/utils"
@@ -51,6 +53,7 @@ func GenerateHtml(filename1, filename2 string, info1, info2 os.FileInfo, msg1, m
 
 	out.WriteString("</td></tr>\n")
 	out.WriteString("</table><br>\n")
+
 	out_release_lock()
 }
 
@@ -169,6 +172,8 @@ func (chg *DiffChangerHtml) diff_lines(ops []DiffOp) {
 
 						write_html_line_change(&chg.buf1, line1, pos1, change1)
 						write_html_line_change(&chg.buf2, line2, pos2, change2)
+
+						writeDiffCSVDelta(&chg.diffbuf, line2)
 					}
 				}
 
@@ -216,10 +221,32 @@ func (chg *DiffChangerHtml) diff_lines(ops []DiffOp) {
 	out.WriteString("</td><td class=\"ttd\">")
 	out.Write(chg.buf2.Bytes())
 	out.WriteString("</td></tr>\n")
+
+	writeDiffToCSV(chg.diffbuf.Bytes())
+}
+
+func writeDiffCSVDelta(buf *bytes.Buffer, line []byte) {
+	buf.Write(line)
+	buf.WriteString("\n")
+}
+
+func writeDiffToCSV(buf []byte) {
+	output_csv_file, err := os.Create(flag_csv_delta)
+	if err != nil {
+		usage(err.Error())
+	}
+	defer output_csv_file.Close()
+
+	outCSV := bufio.NewWriter(output_csv_file)
+	outCSV.WriteString(strings.Join(csvHeaderData, ","))
+	outCSV.WriteString("\n")
+	outCSV.Write(buf)
+	outCSV.Flush()
 }
 
 // Write single line with changes
 func write_html_line_change(buf *bytes.Buffer, line []byte, pos []int, change []bool) {
+
 	in_chg := false
 	for i, end := 0, len(change); i < end; {
 		j, c := i+1, change[i]
@@ -251,6 +278,7 @@ func write_html_lines_unified(buf *bytes.Buffer, class string, mode string, line
 			start2++
 		}
 		write_html_lineno_unified(buf, mode, start1, start2, lineno_width)
+
 		write_html_bytes(buf, line)
 		buf.WriteByte('\n')
 	}
