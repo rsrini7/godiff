@@ -35,6 +35,25 @@ func ColumnReorder(filePath string, columns []int) {
 	}
 }
 
+/*func writeDiffCSVDelta(buf *bytes.Buffer, line []byte) {
+	buf.Write(line)
+	buf.WriteString("\n")
+}
+
+func writeToFile(filePath string, buf []byte) {
+	wFile, err := os.Create(filePath) //".colreordered"
+	if err != nil {
+		usage(err.Error())
+	}
+	defer output_csv_file.Close()
+
+	outCSV := bufio.NewWriter(output_csv_file)
+	outCSV.WriteString(strings.Join(csvHeaderData, ","))
+	outCSV.WriteString("\n")
+	outCSV.Write(buf)
+	outCSV.Flush()
+}*/
+
 func getWriter(filePath string) (*csv.Writer, *os.File) {
 	// Creating csv writer
 	wFile, err := os.Create(filePath + ".colreordered")

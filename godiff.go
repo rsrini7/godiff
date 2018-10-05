@@ -310,6 +310,7 @@ func main() {
 
 	flag.StringVar(&flag_p_keys, "key", "", "The Primary Key Columns")
 	flag.StringVar(&flag_html_output, "html", flag_html_output, "Generate HTML diff file")
+	flag.StringVar(&flag_csv_delta, "csv", flag_csv_delta, "Generate CSV delta file")
 	//flags.StringVar(&numericKey, "numeric", "", "The specified columns are treated as numeric strings.")
 	//flags.StringVar(&reverseKey, "reverse", "", "The specified columns are sorted in reverse order.")
 

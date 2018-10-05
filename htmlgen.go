@@ -138,6 +138,7 @@ func (chg *DiffChangerHtml) diff_lines(ops []DiffOp) {
 		case DIFF_OP_INSERT:
 			write_html_blanks(&chg.buf1, v.end2-v.start2)
 			write_html_lines(&chg.buf2, "add", chg.file2[v.start2:v.end2], v.start2, chg.lineno_width)
+			writeDiffCSVDelta(&chg.diffbuf, chg.file2[v.start2])
 
 		case DIFF_OP_REMOVE:
 			write_html_lines(&chg.buf1, "del", chg.file1[v.start1:v.end1], v.start1, chg.lineno_width)
