@@ -237,7 +237,6 @@ func writeDiffToCSV(buf []byte) {
 		usage(err.Error())
 	}
 	defer output_csv_file.Close()
-
 	outCSV := bufio.NewWriter(output_csv_file)
 	outCSV.WriteString(strings.Join(csvHeaderData, ","))
 	outCSV.WriteString("\n")

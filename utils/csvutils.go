@@ -1,60 +1,68 @@
 package utils
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"os"
+	"strings"
 )
 
 //ColumnReorder is to reorder the CSV columns
 func ColumnReorder(filePath string, columns []int) {
-	file, err := os.Open(filePath)
-	defer file.Close()
 
+	buf := bytes.Buffer{}
+	//defer buf.Reset()
+
+	file, err := os.Open(filePath)
 	if err != nil {
 		_ = fmt.Errorf("error in reading file %s", err)
 	}
+	defer file.Close()
 
 	reader := csv.NewReader(file)
 	var newColumn []string
 
-	writer, wFile := getWriter(filePath)
-	defer wFile.Close()
+	/*writer, wFile := getWriter(filePath)
+	defer wFile.Close()*/
 
 	for line, err := reader.Read(); err == nil; line, err = reader.Read() {
 		for _, v := range columns {
 			newColumn = append(newColumn, line[v])
 		}
 
-		if err = writer.Write(newColumn); err != nil {
+		if _, err = buf.WriteString(strings.Join(newColumn, ",") + "\n"); err != nil {
 			fmt.Println("Error:", err)
 			break
 		}
-		writer.Flush()
+
+		/*if err = writer.Write(newColumn); err != nil {
+			fmt.Println("Error:", err)
+			break
+		}
+		writer.Flush()*/
+
 		newColumn = newColumn[:0]
 	}
-}
 
-/*func writeDiffCSVDelta(buf *bytes.Buffer, line []byte) {
-	buf.Write(line)
-	buf.WriteString("\n")
+	writeToFile(filePath+".colreordered", buf.Bytes())
 }
 
 func writeToFile(filePath string, buf []byte) {
-	wFile, err := os.Create(filePath) //".colreordered"
+	wFile, err := os.Create(filePath)
 	if err != nil {
-		usage(err.Error())
+		fmt.Println("writeToFile Error: ", err)
+		return
 	}
-	defer output_csv_file.Close()
+	defer wFile.Close()
 
-	outCSV := bufio.NewWriter(output_csv_file)
-	outCSV.WriteString(strings.Join(csvHeaderData, ","))
-	outCSV.WriteString("\n")
-	outCSV.Write(buf)
-	outCSV.Flush()
-}*/
+	outFile := bufio.NewWriter(wFile)
+	outFile.Write(buf)
+	outFile.Flush()
+}
 
-func getWriter(filePath string) (*csv.Writer, *os.File) {
+/*func getWriter(filePath string) (*csv.Writer, *os.File) {
 	// Creating csv writer
 	wFile, err := os.Create(filePath + ".colreordered")
 	if err != nil {
@@ -64,7 +72,7 @@ func getWriter(filePath string) (*csv.Writer, *os.File) {
 
 	writer := csv.NewWriter(wFile)
 	return writer, wFile
-}
+}*/
 
 //GetColumnCount : return the CSV column count
 func GetColumnCount(filePath string) int {

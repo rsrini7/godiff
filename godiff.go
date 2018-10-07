@@ -224,6 +224,7 @@ var (
 	flag_max_goroutines          = 1
 	flag_p_keys                  string
 	flag_html_output             string = "diff.html"
+	flag_txt_output              string = "diff.txt"
 	flag_csv_delta               string = "delta.csv"
 )
 
@@ -244,8 +245,10 @@ var regexp_exclude_files *regexp.Regexp
 
 // Buffered stdout
 var (
-	out      *bufio.Writer
-	out_lock sync.Mutex
+	out        *bufio.Writer
+	out_lock   sync.Mutex
+	outputFile *os.File
+	errF       error
 )
 
 // html entity strings
@@ -306,7 +309,8 @@ func main() {
 	flag.BoolVar(&flag_suppress_line_changes, "l", flag_suppress_line_changes, "Do not display changes within lines")
 	flag.BoolVar(&flag_suppress_missing_file, "m", flag_suppress_missing_file, "Do not show content if corresponding file is missing")
 	flag.BoolVar(&flag_unified_context, "u", flag_unified_context, "Unified context")
-	flag.BoolVar(&flag_output_as_text, "n", flag_output_as_text, "Output using 'diff' text format instead of HTML")
+	flag.BoolVar(&flag_output_as_text, "txt", flag_output_as_text, "Output using 'diff' text format instead of HTML")
+	flag.StringVar(&flag_txt_output, "n", flag_txt_output, "Generate given txt diff file")
 
 	flag.StringVar(&flag_p_keys, "key", "", "The Primary Key Columns")
 	flag.StringVar(&flag_html_output, "html", flag_html_output, "Generate HTML diff file")
@@ -316,12 +320,20 @@ func main() {
 
 	flag.Parse()
 
-	output_html_file, err := os.Create(flag_html_output)
-	if err != nil {
-		usage(err.Error())
+	if flag_txt_output != "diff.txt" {
+		flag_output_as_text = true
 	}
 
-	out = bufio.NewWriterSize(output_html_file, OUTPUT_BUF_SIZE)
+	if flag_output_as_text {
+		outputFile, errF = os.Create(flag_txt_output)
+	} else {
+		outputFile, errF = os.Create(flag_html_output)
+	}
+
+	if errF != nil {
+		usage(errF.Error())
+	}
+	out = bufio.NewWriterSize(outputFile, OUTPUT_BUF_SIZE)
 
 	if flag_version {
 		version()
@@ -349,7 +361,7 @@ func main() {
 	// flush output on termination
 	defer func() {
 		out.Flush()
-		output_html_file.Close()
+		outputFile.Close()
 	}()
 
 	// choose which compare and hash function to use
@@ -1250,9 +1262,7 @@ func sortCsv(fname string) (string, os.FileInfo) {
 	file, err := os.Open(fname)
 	defer file.Close()
 
-	if strings.HasSuffix(fname, ".colreordered") {
-		defer os.Remove(fname)
-	}
+	defer removeFile(fname, ".colreordered")
 
 	fnameSorted := fname + ".sorted"
 	wfile, err := os.Create(fnameSorted)
@@ -1363,9 +1373,7 @@ func open_file(fname string, finfo os.FileInfo) *Filedata {
 // Close file (and umap it)
 func (file *Filedata) close_file() {
 
-	if strings.HasSuffix(file.name, ".sorted") {
-		defer os.Remove(file.name)
-	}
+	defer removeFile(file.name, ".sorted")
 
 	if file.osfile != nil {
 		if file.is_mapped && file.data != nil {
@@ -1375,6 +1383,12 @@ func (file *Filedata) close_file() {
 		file.osfile = nil
 	}
 	file.data = nil
+}
+
+func removeFile(fileName string, ext string) {
+	if strings.HasSuffix(fileName, ext) {
+		os.Remove(fileName)
+	}
 }
 
 // check if file is binary
