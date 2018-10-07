@@ -5,12 +5,13 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"github.com/csimplestring/go-csv/detector"
 	"os"
 	"strings"
 )
 
 //ColumnReorder is to reorder the CSV columns
-func ColumnReorder(filePath string, columns []int) {
+func ColumnReorder(filePath string, columns []int,delimiter string) {
 
 	buf := bytes.Buffer{}
 	//defer buf.Reset()
@@ -32,7 +33,7 @@ func ColumnReorder(filePath string, columns []int) {
 			newColumn = append(newColumn, line[v])
 		}
 
-		if _, err = buf.WriteString(strings.Join(newColumn, ",") + "\n"); err != nil {
+		if _, err = buf.WriteString(strings.Join(newColumn, delimiter) + "\n"); err != nil {
 			fmt.Println("Error:", err)
 			break
 		}
@@ -109,4 +110,18 @@ func HeaderPositionEqual(a, b []int) bool {
 		}
 	}
 	return true
+}
+
+//DetectCsvDelimiter - detect and get csv delimiter
+func DetectCsvDelimiter(filePath string) string{
+	detector := detector.New()
+
+	file, err := os.OpenFile(filePath, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	delimiters := detector.DetectDelimiter(file, '"')
+	return delimiters[0]
 }

@@ -65,7 +65,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/rsrini7/godiff/utils"
-	"github.com/wildducktheories/go-csv"
+	"github.com/rsrini7/go-csv"
 )
 
 const (
@@ -269,7 +269,10 @@ var (
 
 var blank_line = make([]byte, 0)
 
-var csvHeaderData []string
+var (
+	csvHeaderData []string
+	csvDelimiter string
+)
 
 func version() {
 	fmt.Printf("godiff. Version %s\n", VERSION)
@@ -414,13 +417,16 @@ func main() {
 		usage("-key is must for csv files - primary key column/s")
 	}
 
+	if filepath.Ext(file1) == ".csv"{
+		csvDelimiter = utils.DetectCsvDelimiter(file1)
+	}
+
 	if !flag_output_as_text {
 		out.WriteString(HTML_HEADER)
 		fmt.Fprintf(out, "<title>Compare %s vs %s</title>\n", html.EscapeString(file1), html.EscapeString(file2))
 		out.WriteString(HTML_CSS)
 		out.WriteString("</head><body>\n")
 		fmt.Fprintf(out, "<p>Compare <strong>%s</strong> vs <strong>%s</strong></p>\n", html.EscapeString(file1), html.EscapeString(file2))
-
 	}
 
 	switch {
@@ -1244,7 +1250,7 @@ func openCsvFile(fname string, finfo os.FileInfo, csvReorder *CsvReorder) *Filed
 
 		//Copy(fname, fname+".original", 2048)
 		if !utils.HeaderPositionEqual(sourceColumn, reorderColumn) {
-			utils.ColumnReorder(fname, reorderColumn)
+			utils.ColumnReorder(fname, reorderColumn,csvDelimiter)
 			return open_file(sortCsv(fname + ".colreordered"))
 		} else {
 			return open_file(sortCsv(fname))
@@ -1276,11 +1282,13 @@ func sortCsv(fname string) (string, os.FileInfo) {
 
 	pKeys := strings.Split(flag_p_keys, ",")
 
+
 	var p *csv.SortProcess
 	p = (&csv.SortKeys{Keys: pKeys, Numeric: []string{}, Reversed: []string{}}).AsSortProcess()
 
 	var errCh = make(chan error, 1)
-	p.Run(csv.WithIoReader(file), csv.WithIoWriter(wfile), errCh)
+	csvDelimiterRune := rune(csvDelimiter[0])
+	p.Run(csv.WithIoReaderAndDelimiter(file,csvDelimiterRune), csv.WithIoWriterAndDelimiter(wfile,csvDelimiterRune), errCh)
 	err = <-errCh
 	if err != nil {
 		fmt.Printf("fatal: %v\n", err)
