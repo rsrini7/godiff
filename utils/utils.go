@@ -2,7 +2,9 @@
 package utils
 
 import (
+	"fmt"
 	"math/rand"
+	"os"
 	"time"
 )
 
@@ -84,4 +86,9 @@ func CToGoString(c []byte) string {
 		n = i
 	}
 	return string(c[:n+1])
+}
+
+func TimeTrack(start time.Time, name string) {
+	elapsed := time.Since(start)
+	fmt.Fprintln(os.Stderr, fmt.Sprintf("%s took %s", name, elapsed))
 }

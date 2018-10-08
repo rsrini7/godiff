@@ -53,6 +53,7 @@ import (
 	"html"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -64,8 +65,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/rsrini7/godiff/utils"
 	"github.com/rsrini7/go-csv"
+	"github.com/rsrini7/godiff/utils"
 )
 
 const (
@@ -226,6 +227,8 @@ var (
 	flag_html_output             string = "diff.html"
 	flag_txt_output              string = "diff.txt"
 	flag_csv_delta               string = "delta.csv"
+	flag_out_folder              string = "output-diff"
+	flag_timeit                  bool   = false
 )
 
 // Job queue for goroutines
@@ -271,7 +274,7 @@ var blank_line = make([]byte, 0)
 
 var (
 	csvHeaderData []string
-	csvDelimiter string
+	csvDelimiter  string
 )
 
 func version() {
@@ -318,6 +321,9 @@ func main() {
 	flag.StringVar(&flag_p_keys, "key", "", "The Primary Key Columns")
 	flag.StringVar(&flag_html_output, "html", flag_html_output, "Generate HTML diff file")
 	flag.StringVar(&flag_csv_delta, "csv", flag_csv_delta, "Generate CSV delta file")
+	flag.StringVar(&flag_out_folder, "diff-dir", flag_out_folder, "Generate diff files in the specified folder")
+	flag.BoolVar(&flag_timeit, "timeit", flag_timeit, "Measure time and print")
+
 	//flags.StringVar(&numericKey, "numeric", "", "The specified columns are treated as numeric strings.")
 	//flags.StringVar(&reverseKey, "reverse", "", "The specified columns are sorted in reverse order.")
 
@@ -326,6 +332,10 @@ func main() {
 	if flag_txt_output != "diff.txt" {
 		flag_output_as_text = true
 	}
+
+	CreateDirIfNotExist(flag_out_folder)
+
+	flag_html_output = path.Join(flag_out_folder, flag_html_output)
 
 	if flag_output_as_text {
 		outputFile, errF = os.Create(flag_txt_output)
@@ -343,6 +353,9 @@ func main() {
 		os.Exit(0)
 	}
 
+	if flag_timeit {
+		defer utils.TimeTrack(time.Now(), "godiff")
+	}
 	// write pprof info
 	if flag_pprof_file != "" {
 		pf, err := os.Create(flag_pprof_file)
@@ -417,7 +430,8 @@ func main() {
 		usage("-key is must for csv files - primary key column/s")
 	}
 
-	if filepath.Ext(file1) == ".csv"{
+	if filepath.Ext(file1) == ".csv" {
+		flag_csv_delta = path.Join(flag_out_folder, flag_csv_delta)
 		csvDelimiter = utils.DetectCsvDelimiter(file1)
 	}
 
@@ -1250,7 +1264,7 @@ func openCsvFile(fname string, finfo os.FileInfo, csvReorder *CsvReorder) *Filed
 
 		//Copy(fname, fname+".original", 2048)
 		if !utils.HeaderPositionEqual(sourceColumn, reorderColumn) {
-			utils.ColumnReorder(fname, reorderColumn,csvDelimiter)
+			utils.ColumnReorder(fname, reorderColumn, csvDelimiter)
 			return open_file(sortCsv(fname + ".colreordered"))
 		} else {
 			return open_file(sortCsv(fname))
@@ -1282,13 +1296,12 @@ func sortCsv(fname string) (string, os.FileInfo) {
 
 	pKeys := strings.Split(flag_p_keys, ",")
 
-
 	var p *csv.SortProcess
 	p = (&csv.SortKeys{Keys: pKeys, Numeric: []string{}, Reversed: []string{}}).AsSortProcess()
 
 	var errCh = make(chan error, 1)
 	csvDelimiterRune := rune(csvDelimiter[0])
-	p.Run(csv.WithIoReaderAndDelimiter(file,csvDelimiterRune), csv.WithIoWriterAndDelimiter(wfile,csvDelimiterRune), errCh)
+	p.Run(csv.WithIoReaderAndDelimiter(file, csvDelimiterRune), csv.WithIoWriterAndDelimiter(wfile, csvDelimiterRune), errCh)
 	err = <-errCh
 	if err != nil {
 		fmt.Printf("fatal: %v\n", err)
@@ -1631,6 +1644,10 @@ func diff_file(filename1, filename2 string, finfo1, finfo2 os.FileInfo) {
 			header:      utils.GetHeader(filename1),
 		}
 		csvHeaderData = csvDeltaReorder.header
+
+		if len(csvHeaderData) > 0 {
+			fmt.Fprintf(out, "<p>%s</p>", strings.Join(csvHeaderData, csvDelimiter))
+		}
 
 		file2 = openCsvFile(filename2, finfo2, csvDeltaReorder)
 	} else {
