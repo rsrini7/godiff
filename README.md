@@ -1,5 +1,6 @@
 #godiff
 A File/Directory diff-like comparison tool with HTML output.
+Enhanced to support CSV files with Primary/Combinational Keys
 
 This program can be use to compare files and directories for differences.
 When comparing directories, it iterates through all files in both directories
@@ -7,11 +8,21 @@ and compare files having the same name.
 
 See example output [here:](http://raw.githack.com/spcau/godiff/master/example.html)
 
-##How to use godiff
+##How to use godiff - general all files
 
 	godiff file1 file2 > results.html
 	godiff directory1 directory > results.html
 
+##How to use godiff - csv files
+
+	* Compare csv files with primary key
+	godiff -key <CaseSensitive-Column-name> file1 file2
+	* Compare csv files with combinational keys
+	 godiff -key <CommaSeperatedCaseSensitive-Column-names> file1 file2
+	* Output diff files to different name / folder
+	 godiff -csv <diff-csv-file-name> -html <diff-html-file-name> -diff-dir <output-dir> -key <column-name> file1 file2
+	* Measure the time taken to generate diff files
+	 godiff -timeit -key <Column-name> file1 file2
 See `godiff -h` for all the available command line options
 
 ##Features
@@ -20,6 +31,12 @@ See `godiff -h` for all the available command line options
 * Supports UTF8 file.
 * Show differences within a line
 * Options for ignore case, white spaces compare, blank lines etc.
+* Compare csv files and generate diff csv file
+* Compare csv files with single / combinational primary keys
+* CSV files Columns / Rows can be any order
+* Measure time taken to create diff files
+* Diff files can be saved in different folder
+
 
 ##Description
 
@@ -49,3 +66,6 @@ On Windows
 
 	go build -o godiff.exe  godiff.go godiff_windows.go
 
+##Prebuild Binary for Windows
+
+https://github.com/rsrini7/godiff/releases/download/snapshot/godiff3.7z
